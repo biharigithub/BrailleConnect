@@ -7,6 +7,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from utils.braille_converter import text_to_braille, braille_to_text
 from utils.image_processor import extract_text_from_image
 from utils.speech_processor import text_to_speech
+from utils.braille_image_processor import detect_braille_from_image
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -31,6 +32,10 @@ def image_to_braille_page():
 @app.route('/braille-to-speech')
 def braille_to_speech_page():
     return render_template('braille_to_speech.html')
+
+@app.route('/braille-image-to-text')
+def braille_image_to_text_page():
+    return render_template('braille_image_to_text.html')
 
 @app.route('/api/text-to-braille', methods=['POST'])
 def convert_text_to_braille():
@@ -93,6 +98,28 @@ def process_image():
     except Exception as e:
         logging.error(f"Error processing image: {str(e)}")
         return jsonify({'error': f'Error processing image: {str(e)}'}), 500
+
+@app.route('/api/braille-image-to-text', methods=['POST'])
+def process_braille_image():
+    if 'braille_image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+    
+    braille_image_file = request.files['braille_image']
+    if braille_image_file.filename == '':
+        return jsonify({'error': 'No image selected'}), 400
+    
+    try:
+        detected_text, processed_image_base64 = detect_braille_from_image(braille_image_file)
+        if not detected_text:
+            return jsonify({'error': 'No Braille patterns detected in the image'}), 400
+        
+        return jsonify({
+            'text': detected_text,
+            'processed_image': processed_image_base64
+        })
+    except Exception as e:
+        logging.error(f"Error processing Braille image: {str(e)}")
+        return jsonify({'error': f'Error processing Braille image: {str(e)}'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
 def convert_text_to_speech():

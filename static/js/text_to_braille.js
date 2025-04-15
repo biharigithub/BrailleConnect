@@ -13,11 +13,19 @@ document.addEventListener('DOMContentLoaded', function() {
     let isRecording = false;
     
     // Initialize speech recognition if supported
-    if ('webkitSpeechRecognition' in window) {
-        recognition = new webkitSpeechRecognition();
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        // Use the appropriate constructor
+        recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
+        
+        recognition.onstart = function() {
+            isRecording = true;
+            recordButton.classList.add('d-none');
+            stopRecordButton.classList.remove('d-none');
+            showNotification('Recording Started', 'Speak now...');
+        };
         
         recognition.onresult = function(event) {
             let interimTranscript = '';
@@ -31,19 +39,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Show interim results
+            if (interimTranscript) {
+                textInput.value = finalTranscript + interimTranscript;
+            }
+            
+            // Process final results
             if (finalTranscript) {
                 textInput.value = finalTranscript;
                 convertTextToBraille(finalTranscript);
                 
                 // Show notification
                 showNotification('Recording Stopped', 'Your speech has been transcribed');
+                
+                // Stop recording if we got final results
+                if (!interimTranscript) {
+                    stopRecording();
+                }
+            }
+        };
+        
+        recognition.onend = function() {
+            isRecording = false;
+            recordButton.classList.remove('d-none');
+            stopRecordButton.classList.add('d-none');
+            
+            // If no text was captured, show a notification
+            if (!textInput.value.trim()) {
+                showNotification('No Speech Detected', 'Please try speaking again');
             }
         };
         
         recognition.onerror = function(event) {
             console.error('Speech recognition error:', event.error);
             stopRecording();
-            showNotification('Error', 'Speech recognition failed: ' + event.error);
+            
+            let errorMessage = 'Speech recognition failed';
+            
+            // Provide more specific error messages
+            switch(event.error) {
+                case 'no-speech':
+                    errorMessage = 'No speech was detected. Please try again.';
+                    break;
+                case 'aborted':
+                    errorMessage = 'Speech input was aborted.';
+                    break;
+                case 'audio-capture':
+                    errorMessage = 'Microphone not available. Please check your microphone settings.';
+                    break;
+                case 'network':
+                    errorMessage = 'Network error occurred. Please check your internet connection.';
+                    break;
+                case 'not-allowed':
+                case 'service-not-allowed':
+                    errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings.';
+                    break;
+                default:
+                    errorMessage = 'Speech recognition error: ' + event.error;
+            }
+            
+            showNotification('Error', errorMessage);
         };
     } else {
         // Hide recording buttons if speech recognition is not supported
@@ -89,11 +144,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function startRecording() {
         if (recognition && !isRecording) {
             try {
+                // Clear previous input
+                textInput.value = '';
+                
+                // Add visual indicator that recording is active
+                recordButton.classList.add('recording');
+                
+                // Start recognition
                 recognition.start();
-                isRecording = true;
-                recordButton.classList.add('d-none');
-                stopRecordButton.classList.remove('d-none');
-                showNotification('Recording', 'Listening...');
             } catch (e) {
                 console.error('Error starting recording:', e);
                 showNotification('Error', 'Could not start recording: ' + e.message);
@@ -106,9 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (recognition && isRecording) {
             try {
                 recognition.stop();
-                isRecording = false;
-                recordButton.classList.remove('d-none');
-                stopRecordButton.classList.add('d-none');
+                recordButton.classList.remove('recording');
             } catch (e) {
                 console.error('Error stopping recording:', e);
             }
