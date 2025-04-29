@@ -3,4 +3,4 @@ gunicorn
 opencv-python
 numpy
 pytesseract
-
+gTTS==2.5.1
